@@ -86,6 +86,7 @@ fetchKline(); // Run immediately at server start
 
 // Health check
 app.get('/', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain');
   res.send('✅ Crypto backend is running!');
 });
 
