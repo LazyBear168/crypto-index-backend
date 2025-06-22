@@ -18,7 +18,7 @@ const pool = new Pool({
 
 // Auto-fetch 1-hour BTC/USDT K-line from CoinGecko Pro
 const fetchKline = async () => {
-  const url = "https://pro-api.coingecko.com/api/v3/coins/bitcoin/market_chart";
+  const url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart";
 
   let retries = 3;
 
@@ -29,7 +29,6 @@ const fetchKline = async () => {
           vs_currency: 'usd',
           interval: 'hourly',
           days: 1,
-          x_cg_pro_api_key: process.env.COINGECKO_API_KEY
         }
       });
 
