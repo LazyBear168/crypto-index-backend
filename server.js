@@ -5,54 +5,59 @@ require('dotenv').config();
 const express = require("express");
 const axios = require("axios");
 const { Pool } = require("pg");
-require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const delay = ms => new Promise(res => setTimeout(res, ms));
 
-// Connect to PostgreSQL
+// PostgreSQL connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  ssl: { rejectUnauthorized: false }
 });
 
-// Auto-fetch 1-minute BTC/USDT K-line from Binance
+// Auto-fetch 1-minute BTC/USDT K-line from CoinGecko
 const fetchKline = async () => {
-  try {
-    const url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&interval=minutely&days=1";
+  const url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&interval=minutely&days=1";
+  let retries = 3;
 
-    const res = await axios.get(url, {
-      headers: {
-        'User-Agent': 'crypto-index-app/1.0'
+  while (retries > 0) {
+    try {
+      const res = await axios.get(url, {
+        headers: { 'User-Agent': 'crypto-index-app/1.0' }
+      });
+
+      const prices = res.data.prices;
+      const volumes = res.data.total_volumes;
+      if (!prices || prices.length === 0) throw new Error("No price data");
+
+      const latestPrice = prices[prices.length - 1];
+      const latestVolume = volumes[volumes.length - 1];
+
+      const timestamp = new Date(latestPrice[0]);
+      const close = latestPrice[1];
+      const volume = latestVolume[1];
+      const open = prices[prices.length - 2]?.[1] || close;
+      const high = Math.max(...prices.slice(-5).map(p => p[1]));
+      const low = Math.min(...prices.slice(-5).map(p => p[1]));
+
+      await pool.query(
+        "INSERT INTO btc_kline (timestamp, open, high, low, close, volume) VALUES ($1, $2, $3, $4, $5, $6)",
+        [timestamp, open, high, low, close, volume]
+      );
+
+      console.log(`✅ Inserted BTC K-line at ${timestamp.toISOString()}`);
+      break; // success, exit retry loop
+    } catch (err) {
+      if (err.response?.status === 429) {
+        console.warn("⏳ Rate limit hit. Retrying in 10s...");
+        retries--;
+        await delay(10000);
+      } else {
+        console.error("❌ Error inserting kline:", err.message);
+        break;
       }
-    });
-
-    const prices = res.data.prices;
-    const volumes = res.data.total_volumes;
-
-    if (!prices || prices.length === 0) throw new Error("No price data");
-
-    const latestPrice = prices[prices.length - 1];
-    const latestVolume = volumes[volumes.length - 1];
-
-    const timestamp = new Date(latestPrice[0]);
-    const close = latestPrice[1];
-    const volume = latestVolume[1];
-
-    const open = prices[prices.length - 2]?.[1] || close;
-    const high = Math.max(...prices.slice(-5).map(p => p[1]));
-    const low = Math.min(...prices.slice(-5).map(p => p[1]));
-
-    await pool.query(
-      "INSERT INTO btc_kline (timestamp, open, high, low, close, volume) VALUES ($1, $2, $3, $4, $5, $6)",
-      [timestamp, open, high, low, close, volume]
-    );
-
-    console.log(`✅ Inserted CoinGecko BTC/USDT at ${timestamp.toISOString()}`);
-  } catch (err) {
-    console.error("❌ Error inserting kline:", err.message);
+    }
   }
 };
 
@@ -60,12 +65,12 @@ const fetchKline = async () => {
 setInterval(fetchKline, 60 * 1000);
 fetchKline(); // Also run immediately at server start
 
-// confirm backend is alive 
+// Confirm backend is alive
 app.get('/', (req, res) => {
   res.send('✅ Crypto backend is running!');
 });
 
-// API route to get all klines
+// Get latest 100 K-lines
 app.get('/kline', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM btc_kline ORDER BY timestamp DESC LIMIT 100');
@@ -75,6 +80,5 @@ app.get('/kline', async (req, res) => {
     res.status(500).send('Server error');
   }
 });
-
 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
