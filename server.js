@@ -23,6 +23,8 @@ const fetchKline = async () => {
   try {
     const url = "https://api.allorigins.win/raw?url=https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=1";
     const res = await axios.get(url);
+    console.log("DEBUG Kline response:", res.data);
+
     const [timestamp, open, high, low, close, volume] = res.data[0];
 
     await pool.query(
