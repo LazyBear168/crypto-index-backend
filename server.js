@@ -21,7 +21,7 @@ const pool = new Pool({
 // Auto-fetch 1-minute BTC/USDT K-line from Binance
 const fetchKline = async () => {
   try {
-    const url = "https://corsproxy.io/?https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=1";
+    const url = "https://api.allorigins.win/raw?url=https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=1";
     const res = await axios.get(url);
     const [timestamp, open, high, low, close, volume] = res.data[0];
 
