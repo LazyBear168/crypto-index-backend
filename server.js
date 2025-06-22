@@ -27,8 +27,7 @@ const fetchKline = async () => {
       const res = await axios.get(url, {
         params: {
           vs_currency: 'usd',
-          interval: 'hourly',
-          days: 1,
+          days: 2  // ✅ This gives hourly data now
         }
       });
 
@@ -47,14 +46,12 @@ const fetchKline = async () => {
       const high = Math.max(...prices.slice(-6).map(p => p[1]));
       const low = Math.min(...prices.slice(-6).map(p => p[1]));
 
-      // 🛡️ Check for duplicate timestamp
       const check = await pool.query("SELECT 1 FROM btc_kline WHERE timestamp = $1", [timestamp]);
       if (check.rowCount > 0) {
         console.log(`⚠️ Duplicate skipped for ${timestamp.toISOString()}`);
         break;
       }
 
-      // ✅ Insert new kline
       await pool.query(
         "INSERT INTO btc_kline (timestamp, open, high, low, close, volume) VALUES ($1, $2, $3, $4, $5, $6)",
         [timestamp, open, high, low, close, volume]
