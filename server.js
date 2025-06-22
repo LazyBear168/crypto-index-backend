@@ -2,13 +2,16 @@
 // Author: Sunny
 
 require('dotenv').config();
+
+require('dotenv').config();
 const express = require("express");
+const cors = require("cors"); 
 const axios = require("axios");
 const { Pool } = require("pg");
-const cors = require('cors');
-app.use(cors());
 
-const app = express();
+const app = express(); 
+app.use(cors()); 
+
 const PORT = process.env.PORT || 3001;
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
