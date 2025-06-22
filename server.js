@@ -5,10 +5,14 @@ require('dotenv').config();
 const express = require("express");
 const axios = require("axios");
 const { Pool } = require("pg");
+const cors = require('cors');
+app.use(cors());
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const delay = ms => new Promise(res => setTimeout(res, ms));
+
+
 
 // PostgreSQL connection
 const pool = new Pool({
