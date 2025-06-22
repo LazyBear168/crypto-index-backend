@@ -18,13 +18,16 @@ const pool = new Pool({
 
 // Auto-fetch 1-minute BTC/USDT K-line from CoinGecko
 const fetchKline = async () => {
-  const url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&interval=minutely&days=1";
+  const url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&interval=hourly&days=1";
   let retries = 3;
 
   while (retries > 0) {
     try {
       const res = await axios.get(url, {
-        headers: { 'User-Agent': 'crypto-index-app/1.0' }
+        headers: {
+          'x-cg-demo-api-key': process.env.COINGECKO_API_KEY,
+          'User-Agent': 'crypto-index-app/1.0'
+        }
       });
 
       const prices = res.data.prices;
@@ -38,8 +41,9 @@ const fetchKline = async () => {
       const close = latestPrice[1];
       const volume = latestVolume[1];
       const open = prices[prices.length - 2]?.[1] || close;
-      const high = Math.max(...prices.slice(-5).map(p => p[1]));
-      const low = Math.min(...prices.slice(-5).map(p => p[1]));
+      const high = Math.max(...prices.slice(-6).map(p => p[1])); // last 6 hours (optional)
+      const low = Math.min(...prices.slice(-6).map(p => p[1]));
+
 
       await pool.query(
         "INSERT INTO btc_kline (timestamp, open, high, low, close, volume) VALUES ($1, $2, $3, $4, $5, $6)",
@@ -62,7 +66,7 @@ const fetchKline = async () => {
 };
 
 // Run every 1 minute
-setInterval(fetchKline, 60 * 1000);
+setInterval(fetchKline, 60 * 60 * 1000);
 fetchKline(); // Also run immediately at server start
 
 // Confirm backend is alive
