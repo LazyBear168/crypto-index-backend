@@ -22,12 +22,17 @@ const pool = new Pool({
 const fetchKline = async () => {
   try {
     const url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&interval=minutely&days=1";
-    const res = await axios.get(url);
+
+    const res = await axios.get(url, {
+      headers: {
+        'User-Agent': 'crypto-index-app/1.0'
+      }
+    });
 
     const prices = res.data.prices;
     const volumes = res.data.total_volumes;
 
-    if (!prices || prices.length === 0) throw new Error("No price data available");
+    if (!prices || prices.length === 0) throw new Error("No price data");
 
     const latestPrice = prices[prices.length - 1];
     const latestVolume = volumes[volumes.length - 1];
@@ -36,9 +41,8 @@ const fetchKline = async () => {
     const close = latestPrice[1];
     const volume = latestVolume[1];
 
-    // You can use previous prices to calculate high/low/open manually if needed
     const open = prices[prices.length - 2]?.[1] || close;
-    const high = Math.max(...prices.slice(-5).map(p => p[1])); // Last 5 min
+    const high = Math.max(...prices.slice(-5).map(p => p[1]));
     const low = Math.min(...prices.slice(-5).map(p => p[1]));
 
     await pool.query(
@@ -51,7 +55,6 @@ const fetchKline = async () => {
     console.error("❌ Error inserting kline:", err.message);
   }
 };
-
 
 // Run every 1 minute
 setInterval(fetchKline, 60 * 1000);
