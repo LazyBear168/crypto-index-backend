@@ -16,22 +16,26 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Auto-fetch 1-minute BTC/USDT K-line from CoinGecko
+// Auto-fetch 1-hour BTC/USDT K-line from CoinGecko Pro
 const fetchKline = async () => {
-  const url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&interval=hourly&days=1";
+  const url = "https://pro-api.coingecko.com/api/v3/coins/bitcoin/market_chart";
+
   let retries = 3;
 
   while (retries > 0) {
     try {
       const res = await axios.get(url, {
-        headers: {
-          'x-cg-demo-api-key': process.env.COINGECKO_API_KEY,
-          'User-Agent': 'crypto-index-app/1.0'
+        params: {
+          vs_currency: 'usd',
+          interval: 'hourly',
+          days: 1,
+          x_cg_pro_api_key: process.env.COINGECKO_API_KEY
         }
       });
 
       const prices = res.data.prices;
       const volumes = res.data.total_volumes;
+
       if (!prices || prices.length === 0) throw new Error("No price data");
 
       const latestPrice = prices[prices.length - 1];
@@ -41,40 +45,48 @@ const fetchKline = async () => {
       const close = latestPrice[1];
       const volume = latestVolume[1];
       const open = prices[prices.length - 2]?.[1] || close;
-      const high = Math.max(...prices.slice(-6).map(p => p[1])); // last 6 hours (optional)
+      const high = Math.max(...prices.slice(-6).map(p => p[1]));
       const low = Math.min(...prices.slice(-6).map(p => p[1]));
 
+      // 🛡️ Check for duplicate timestamp
+      const check = await pool.query("SELECT 1 FROM btc_kline WHERE timestamp = $1", [timestamp]);
+      if (check.rowCount > 0) {
+        console.log(`⚠️ Duplicate skipped for ${timestamp.toISOString()}`);
+        break;
+      }
 
+      // ✅ Insert new kline
       await pool.query(
         "INSERT INTO btc_kline (timestamp, open, high, low, close, volume) VALUES ($1, $2, $3, $4, $5, $6)",
         [timestamp, open, high, low, close, volume]
       );
 
       console.log(`✅ Inserted BTC K-line at ${timestamp.toISOString()}`);
-      break; // success, exit retry loop
+      break;
+
     } catch (err) {
       if (err.response?.status === 429) {
         console.warn("⏳ Rate limit hit. Retrying in 10s...");
         retries--;
         await delay(10000);
       } else {
-        console.error("❌ Error inserting kline:", err.message);
+        console.error("❌ Error inserting kline:", err.response?.data || err.message);
         break;
       }
     }
   }
 };
 
-// Run every 1 minute
-setInterval(fetchKline, 60 * 60 * 1000);
-fetchKline(); // Also run immediately at server start
+// Run every 1 hour
+setInterval(fetchKline, 60 * 60 * 1000); // 60 minutes
+fetchKline(); // Run immediately at server start
 
-// Confirm backend is alive
+// Health check
 app.get('/', (req, res) => {
   res.send('✅ Crypto backend is running!');
 });
 
-// Get latest 100 K-lines
+// API to get latest 100 K-lines
 app.get('/kline', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM btc_kline ORDER BY timestamp DESC LIMIT 100');
