@@ -2,12 +2,10 @@
 // Author: Sunny
 
 require('dotenv').config();
-
-require('dotenv').config();
 const express = require("express");
 const cors = require("cors"); 
 const axios = require("axios");
-const { Pool } = require("pg");
+const db = require("./db");
 
 const app = express(); 
 app.use(cors()); 
@@ -16,14 +14,7 @@ const PORT = process.env.PORT || 3001;
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
 
-
-// PostgreSQL connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
-// Auto-fetch 1-hour BTC/USDT K-line from CoinGecko Pro
+// Auto-fetch 1-hour BTC/USDT K-line from CoinGecko
 const fetchKline = async () => {
   const url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart";
 
@@ -34,7 +25,7 @@ const fetchKline = async () => {
       const res = await axios.get(url, {
         params: {
           vs_currency: 'usd',
-          days: 2  // ✅ This gives hourly data now
+          days: 2  // This gives hourly data now
         }
       });
 
@@ -53,13 +44,13 @@ const fetchKline = async () => {
       const high = Math.max(...prices.slice(-6).map(p => p[1]));
       const low = Math.min(...prices.slice(-6).map(p => p[1]));
 
-      const check = await pool.query("SELECT 1 FROM btc_kline WHERE timestamp = $1", [timestamp]);
+      const check = await db.query("SELECT 1 FROM btc_kline WHERE timestamp = $1", [timestamp]);
       if (check.rowCount > 0) {
         console.log(`⚠️ Duplicate skipped for ${timestamp.toISOString()}`);
         break;
       }
 
-      await pool.query(
+      await db.query(
         "INSERT INTO btc_kline (timestamp, open, high, low, close, volume) VALUES ($1, $2, $3, $4, $5, $6)",
         [timestamp, open, high, low, close, volume]
       );
@@ -93,7 +84,7 @@ app.get('/', (req, res) => {
 // API to get latest 100 K-lines
 app.get('/kline', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM btc_kline ORDER BY timestamp DESC LIMIT 100');
+    const result = await db.query('SELECT * FROM btc_kline ORDER BY timestamp DESC LIMIT 100');
     res.json(result.rows);
   } catch (err) {
     console.error(err);
