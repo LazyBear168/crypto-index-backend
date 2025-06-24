@@ -94,7 +94,7 @@ app.get('/', (req, res) => {
 // Get latest 100 hourly prices
 app.get('/price/hourly', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM btc_price_hourly ORDER BY timestamp DESC LIMIT 100');
+    const result = await db.query('SELECT * FROM btc_price_hourly ORDER BY timestamp DESC');
     res.json(result.rows);
   } catch (err) {
     console.error(err);
