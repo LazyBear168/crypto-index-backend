@@ -69,21 +69,30 @@ const fetchHourlyPrice = async () => {
 
 
 // Run every full hour
-const scheduleHourlyFetch = () => {
-  const now = new Date();
-  const delayToNextHour = (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000 - now.getMilliseconds();
+// Run every 10 minutes
+const scheduleTenMinuteFetch = () => {
+  fetchHourlyPrice(); // Immediately fetch once
 
-  console.log(`⏰ Waiting ${Math.round(delayToNextHour / 1000)} seconds to start next full-hour job`);
+  const now = new Date();
+  const minutes = now.getMinutes();
+  const nextTenMinuteMark = Math.ceil(minutes / 10) * 10;
+  const delayToNextRun =
+    (nextTenMinuteMark - minutes) * 60 * 1000 -
+    now.getSeconds() * 1000 -
+    now.getMilliseconds();
+
+  console.log(`⏰ Waiting ${Math.round(delayToNextRun / 1000)} seconds to start 10-minute interval job`);
 
   setTimeout(() => {
-    fetchHourlyPrice(); // Run at the next full hour
+    fetchHourlyPrice(); // Run at the next 10-minute mark
 
-    // Then run every hour on the hour
-    setInterval(fetchHourlyPrice, 60 * 60 * 1000);
-  }, delayToNextHour);
+    // Then run every 10 minutes
+    setInterval(fetchHourlyPrice, 10 * 60 * 1000);
+  }, delayToNextRun);
 };
 
-scheduleHourlyFetch();
+scheduleTenMinuteFetch();
+
 
 
 // Health check
@@ -105,7 +114,7 @@ app.get('/price/hourly', async (req, res) => {
 // Serve historical K-line data
 app.get('/kline', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM btc_kline ORDER BY timestamp DESC LIMIT 100');
+    const result = await db.query('SELECT * FROM btc_kline ORDER BY timestamp DESC');
     res.json(result.rows);
   } catch (err) {
     console.error(err);
