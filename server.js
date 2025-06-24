@@ -1,5 +1,5 @@
 // File name: server.js
-// use terminal by connect_crypto_db
+// use terminal by psql "postgresql://crypto_data_db_user:Ab7BqcyTVswXoiAEERrGKKnUaB57LliQ@dpg-d1bo9e3e5dus73eq88pg-a.oregon-postgres.render.com:5432/crypto_data_db?sslmode=require"
 // Author: Sunny
 
 require('dotenv').config();
@@ -25,33 +25,35 @@ const fetchHourlyPrice = async () => {
         params: {
           vs_currency: 'usd',
           days: 1,
-          interval: 'hourly'
-        }
+          interval: 'hourly',
+        },
       });
 
       const prices = res.data.prices;
       if (!prices || prices.length === 0) throw new Error("No price data");
 
+      // Get the latest price entry
       const [timestampMs, close] = prices[prices.length - 1];
       const timestamp = new Date(timestampMs);
+      timestamp.setMinutes(0, 0, 0); // Round to top of the hour
 
-      // Round to hour to avoid duplicates
-      timestamp.setMinutes(0, 0, 0);
-
-      const check = await db.query("SELECT 1 FROM btc_price_hourly WHERE timestamp = $1", [timestamp]);
-      if (check.rowCount > 0) {
-        console.log(`⚠️ Duplicate skipped for ${timestamp.toISOString()}`);
-        break;
-      }
-
-      await db.query(
-        "INSERT INTO btc_price_hourly (timestamp, close) VALUES ($1, $2)",
-        [timestamp, close]
+      // Check if this timestamp already exists
+      const check = await db.query(
+        "SELECT 1 FROM btc_price_hourly WHERE timestamp = $1",
+        [timestamp]
       );
 
-      console.log(`✅ Inserted BTC price at ${timestamp.toISOString()}`);
-      break;
+      if (check.rowCount > 0) {
+        console.log(`⚠️ Duplicate skipped for ${timestamp.toISOString()}`);
+      } else {
+        await db.query(
+          "INSERT INTO btc_price_hourly (timestamp, close) VALUES ($1, $2)",
+          [timestamp, close]
+        );
+        console.log(`✅ Inserted BTC price at ${timestamp.toISOString()}`);
+      }
 
+      break; // exit while loop after success
     } catch (err) {
       if (err.response?.status === 429) {
         console.warn("⏳ Rate limit hit. Retrying in 10s...");
@@ -64,6 +66,7 @@ const fetchHourlyPrice = async () => {
     }
   }
 };
+
 
 // Run every full hour
 const scheduleHourlyFetch = () => {
