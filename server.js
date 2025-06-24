@@ -99,4 +99,16 @@ app.get('/price/hourly', async (req, res) => {
   }
 });
 
+// Serve historical K-line data
+app.get('/kline', async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM btc_kline ORDER BY timestamp DESC LIMIT 100');
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+});
+
+
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
