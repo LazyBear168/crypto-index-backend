@@ -119,24 +119,28 @@ app.get('/kline', async (req, res) => {
     if (start && end) {
       result = await db.query(
         `SELECT * FROM btc_kline
-         WHERE timestamp BETWEEN $1 AND $2
+         WHERE timestamp BETWEEN $1::timestamptz AND $2::timestamptz
          ORDER BY timestamp ASC`,
-        [new Date(start), new Date(end)]
+        [start, end]  // 直接用 ISO 字串，Postgres 可自動解析
       );
     } else {
-      // fallback: latest 200 entries
+      // fallback: latest 200 entries, still ordered by ASC
       result = await db.query(
-        `SELECT * FROM btc_kline
-         ORDER BY timestamp DESC
-         LIMIT 200`
+        `SELECT * FROM (
+           SELECT * FROM btc_kline
+           ORDER BY timestamp DESC
+           LIMIT 200
+         ) AS sub
+         ORDER BY timestamp ASC`
       );
     }
 
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    console.error("❌ /kline error:", err);
     res.status(500).send('Server error');
   }
 });
+
 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
