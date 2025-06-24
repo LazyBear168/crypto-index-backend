@@ -24,8 +24,7 @@ const fetchHourlyPrice = async () => {
       const res = await axios.get(url, {
         params: {
           vs_currency: 'usd',
-          days: 1,
-          interval: 'hourly',
+          days: 2
         },
       });
 
@@ -68,7 +67,6 @@ const fetchHourlyPrice = async () => {
 };
 
 
-// Run every full hour
 // Run every 10 minutes
 const scheduleTenMinuteFetch = () => {
   fetchHourlyPrice(); // Immediately fetch once
