@@ -34,7 +34,7 @@ const fetchHourlyPrice = async () => {
       // Get the latest price entry
       const [timestampMs, close] = prices[prices.length - 1];
       const timestamp = new Date(timestampMs);
-      timestamp.setMinutes(0, 0, 0); // Round to top of the hour
+      // timestamp.setMinutes(0, 0, 0); // Round to top of the hour
 
       // Check if this timestamp already exists
       const check = await db.query(
