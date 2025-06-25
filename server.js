@@ -1,6 +1,6 @@
 // File name: server.js
 // use terminal by psql "postgresql://crypto_data_db_user:Ab7BqcyTVswXoiAEERrGKKnUaB57LliQ@dpg-d1bo9e3e5dus73eq88pg-a.oregon-postgres.render.com:5432/crypto_data_db?sslmode=require"
-// Author: Sunny
+// Author: Sunny1
 
 require('dotenv').config();
 const express = require("express");
