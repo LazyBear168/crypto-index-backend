@@ -44,7 +44,7 @@ const fetchHourlyKline = async () => {
 
       // Check if this timestamp already exists
       const check = await db.query(
-        "SELECT 1 FROM btc_kline_hourly WHERE timestamp = $1",
+        "SELECT 1 FROM btc_kline WHERE timestamp = $1",
         [timestamp]
       );
 
@@ -52,7 +52,7 @@ const fetchHourlyKline = async () => {
         console.log(`⚠️ Duplicate skipped for ${timestamp.toISOString()}`);
       } else {
         await db.query(
-          "INSERT INTO btc_kline_hourly (timestamp, open, high, low, close, volume) VALUES ($1, $2, $3, $4, $5, $6)",
+          "INSERT INTO btc_kline (timestamp, open, high, low, close, volume) VALUES ($1, $2, $3, $4, $5, $6)",
           [timestamp, open, high, low, close, 0] // Volume is not available in free CoinGecko API
         );
         console.log(`✅ Inserted BTC K-line at ${timestamp.toISOString()} - O:${open} H:${high} L:${low} C:${close}`);
@@ -113,7 +113,7 @@ app.get('/', (req, res) => {
 // Get latest hourly K-line data
 app.get('/kline/hourly', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM btc_kline_hourly ORDER BY timestamp DESC LIMIT 100');
+    const result = await db.query('SELECT * FROM btc_kline ORDER BY timestamp DESC LIMIT 100');
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -130,7 +130,7 @@ app.get('/kline', async (req, res) => {
 
     if (start && end) {
       result = await db.query(
-        `SELECT * FROM btc_kline_hourly
+        `SELECT * FROM btc_kline
          WHERE timestamp BETWEEN $1::timestamptz AND $2::timestamptz
          ORDER BY timestamp ASC`,
         [start, end]
@@ -139,7 +139,7 @@ app.get('/kline', async (req, res) => {
       // fallback: latest 200 entries, still ordered by ASC
       result = await db.query(
         `SELECT * FROM (
-           SELECT * FROM btc_kline_hourly
+           SELECT * FROM btc_kline
            ORDER BY timestamp DESC
            LIMIT 200
          ) AS sub
