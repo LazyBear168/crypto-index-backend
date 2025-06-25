@@ -14,9 +14,9 @@ app.use(cors());
 const PORT = process.env.PORT || 3001;
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
-// Fetch hourly BTC price from CoinGecko (latest)
-const fetchHourlyPrice = async () => {
-  const url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart";
+// Fetch hourly K-line data from CoinGecko
+const fetchHourlyKline = async () => {
+  const url = "https://api.coingecko.com/api/v3/coins/bitcoin/ohlc";
   let retries = 3;
 
   while (retries > 0) {
@@ -24,21 +24,20 @@ const fetchHourlyPrice = async () => {
       const res = await axios.get(url, {
         params: {
           vs_currency: 'usd',
-          days: 2
+          days: 2 // Get last 2 days of hourly data
         },
       });
 
-      const prices = res.data.prices;
-      if (!prices || prices.length === 0) throw new Error("No price data");
+      const ohlcData = res.data;
+      if (!ohlcData || ohlcData.length === 0) throw new Error("No OHLC data");
 
-      // Get the latest price entry
-      const [timestampMs, close] = prices[prices.length - 1];
+      // Get the latest OHLC entry
+      const [timestampMs, open, high, low, close] = ohlcData[ohlcData.length - 1];
       const timestamp = new Date(timestampMs);
-      // timestamp.setMinutes(0, 0, 0); // Round to top of the hour
 
       // Check if this timestamp already exists
       const check = await db.query(
-        "SELECT 1 FROM btc_price_hourly WHERE timestamp = $1",
+        "SELECT 1 FROM btc_kline WHERE timestamp = $1",
         [timestamp]
       );
 
@@ -46,10 +45,10 @@ const fetchHourlyPrice = async () => {
         console.log(`⚠️ Duplicate skipped for ${timestamp.toISOString()}`);
       } else {
         await db.query(
-          "INSERT INTO btc_price_hourly (timestamp, close) VALUES ($1, $2)",
-          [timestamp, close]
+          "INSERT INTO btc_kline (timestamp, open, high, low, close, volume) VALUES ($1, $2, $3, $4, $5, $6)",
+          [timestamp, open, high, low, close, 0] // Volume is not available in free CoinGecko API
         );
-        console.log(`✅ Inserted BTC price at ${timestamp.toISOString()}`);
+        console.log(`✅ Inserted BTC K-line at ${timestamp.toISOString()} - O:${open} H:${high} L:${low} C:${close}`);
       }
 
       break; // exit while loop after success
@@ -59,17 +58,16 @@ const fetchHourlyPrice = async () => {
         retries--;
         await delay(10000);
       } else {
-        console.error("❌ Error inserting hourly price:", err.response?.data || err.message);
+        console.error("❌ Error inserting hourly K-line:", err.response?.data || err.message);
         break;
       }
     }
   }
 };
 
-
 // Run every 10 minutes
 const scheduleTenMinuteFetch = () => {
-  fetchHourlyPrice(); // Immediately fetch once
+  fetchHourlyKline(); // Immediately fetch once
 
   const now = new Date();
   const minutes = now.getMinutes();
@@ -82,26 +80,24 @@ const scheduleTenMinuteFetch = () => {
   console.log(`⏰ Waiting ${Math.round(delayToNextRun / 1000)} seconds to start 10-minute interval job`);
 
   setTimeout(() => {
-    fetchHourlyPrice(); // Run at the next 10-minute mark
+    fetchHourlyKline(); // Run at the next 10-minute mark
 
     // Then run every 10 minutes
-    setInterval(fetchHourlyPrice, 10 * 60 * 1000);
+    setInterval(fetchHourlyKline, 10 * 60 * 1000);
   }, delayToNextRun);
 };
 
 scheduleTenMinuteFetch();
-
-
 
 // Health check
 app.get('/', (req, res) => {
   res.send('✅ Crypto backend is running!');
 });
 
-// Get latest 100 hourly prices
-app.get('/price/hourly', async (req, res) => {
+// Get latest hourly K-line data
+app.get('/kline/hourly', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM btc_price_hourly ORDER BY timestamp DESC');
+    const result = await db.query('SELECT * FROM btc_kline ORDER BY timestamp DESC LIMIT 100');
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -109,7 +105,7 @@ app.get('/price/hourly', async (req, res) => {
   }
 });
 
-// Serve historical K-line data with optional start/end
+// Serve historical K-line data with optional start/end (updated to use new table)
 app.get('/kline', async (req, res) => {
   const { start, end } = req.query;
 
@@ -121,7 +117,7 @@ app.get('/kline', async (req, res) => {
         `SELECT * FROM btc_kline
          WHERE timestamp BETWEEN $1::timestamptz AND $2::timestamptz
          ORDER BY timestamp ASC`,
-        [start, end]  // 直接用 ISO 字串，Postgres 可自動解析
+        [start, end]
       );
     } else {
       // fallback: latest 200 entries, still ordered by ASC
@@ -141,6 +137,5 @@ app.get('/kline', async (req, res) => {
     res.status(500).send('Server error');
   }
 });
-
 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
