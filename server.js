@@ -44,16 +44,16 @@ const fetchHourlyKline = async () => {
 
       // Check if this timestamp already exists
       const check = await db.query(
-        "SELECT 1 FROM btc_kline WHERE timestamp = $1",
-        [timestamp]
+        `SELECT 1 FROM btc_kline WHERE timestamp = $1 AND pair = $2`,
+        [timestamp, 'BTC/USDT']
       );
 
       if (check.rowCount > 0) {
         console.log(`⚠️ Duplicate skipped for ${timestamp.toISOString()}`);
       } else {
         await db.query(
-          "INSERT INTO btc_kline (timestamp, open, high, low, close, volume) VALUES ($1, $2, $3, $4, $5, $6)",
-          [timestamp, open, high, low, close, 0] // Volume is not available in free CoinGecko API
+          "INSERT INTO btc_kline (timestamp, open, high, low, close, volume, pair) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+          [timestamp, open, high, low, close, 0, 'BTC/USDT'] // Volume is not available in free CoinGecko API
         );
         console.log(`✅ Inserted BTC K-line at ${timestamp.toISOString()} - O:${open} H:${high} L:${low} C:${close}`);
       }
@@ -123,7 +123,7 @@ app.get('/kline/hourly', async (req, res) => {
 
 // Serve historical K-line data with optional start/end (updated to use new table)
 app.get('/kline', async (req, res) => {
-  const { start, end } = req.query;
+  const { start, end, pair = 'BTC/USDT' } = req.query;
 
   try {
     let result;
@@ -131,19 +131,21 @@ app.get('/kline', async (req, res) => {
     if (start && end) {
       result = await db.query(
         `SELECT * FROM btc_kline
-         WHERE timestamp BETWEEN $1::timestamptz AND $2::timestamptz
+         WHERE timestamp BETWEEN $1::timestamptz AND $2::timestamptz AND pair = $3
          ORDER BY timestamp ASC`,
-        [start, end]
+        [start, end, pair]
       );
     } else {
       // fallback: latest 200 entries, still ordered by ASC
       result = await db.query(
         `SELECT * FROM (
-           SELECT * FROM btc_kline
-           ORDER BY timestamp DESC
-           LIMIT 200
-         ) AS sub
-         ORDER BY timestamp ASC`
+        SELECT * FROM btc_kline
+        WHERE pair = $1
+        ORDER BY timestamp DESC
+        LIMIT 200
+        ) AS sub
+        ORDER BY timestamp ASC`,
+        [pair]
       );
     }
 
