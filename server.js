@@ -21,11 +21,18 @@ const fetchHourlyKline = async () => {
 
   while (retries > 0) {
     try {
+      // Add delay before each request to avoid rate limiting
+      await delay(2000); // 2 second delay
+      
       const res = await axios.get(url, {
         params: {
           vs_currency: 'usd',
-          days: 2 // Get last 2 days of hourly data
+          days: 1 // Reduced to 1 day to minimize API calls
         },
+        timeout: 10000, // 10 second timeout
+        headers: {
+          'User-Agent': 'CryptoBackend/1.0'
+        }
       });
 
       const ohlcData = res.data;
@@ -37,7 +44,7 @@ const fetchHourlyKline = async () => {
 
       // Check if this timestamp already exists
       const check = await db.query(
-        "SELECT 1 FROM btc_kline WHERE timestamp = $1",
+        "SELECT 1 FROM btc_kline_hourly WHERE timestamp = $1",
         [timestamp]
       );
 
@@ -45,7 +52,7 @@ const fetchHourlyKline = async () => {
         console.log(`⚠️ Duplicate skipped for ${timestamp.toISOString()}`);
       } else {
         await db.query(
-          "INSERT INTO btc_kline (timestamp, open, high, low, close, volume) VALUES ($1, $2, $3, $4, $5, $6)",
+          "INSERT INTO btc_kline_hourly (timestamp, open, high, low, close, volume) VALUES ($1, $2, $3, $4, $5, $6)",
           [timestamp, open, high, low, close, 0] // Volume is not available in free CoinGecko API
         );
         console.log(`✅ Inserted BTC K-line at ${timestamp.toISOString()} - O:${open} H:${high} L:${low} C:${close}`);
@@ -54,40 +61,49 @@ const fetchHourlyKline = async () => {
       break; // exit while loop after success
     } catch (err) {
       if (err.response?.status === 429) {
-        console.warn("⏳ Rate limit hit. Retrying in 10s...");
+        console.warn(`⏳ Rate limit hit. Retrying in 30s... (${retries} retries left)`);
         retries--;
-        await delay(10000);
+        await delay(30000); // Increased delay to 30 seconds
+      } else if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
+        console.warn(`⏳ Request timeout. Retrying in 15s... (${retries} retries left)`);
+        retries--;
+        await delay(15000);
       } else {
         console.error("❌ Error inserting hourly K-line:", err.response?.data || err.message);
         break;
       }
     }
   }
+  
+  if (retries === 0) {
+    console.error("❌ Failed to fetch after all retries. Will try again in next cycle.");
+  }
 };
 
-// Run every 10 minutes
-const scheduleTenMinuteFetch = () => {
-  fetchHourlyKline(); // Immediately fetch once
+// Run every 15 minutes instead of 10 to reduce API pressure
+const scheduleFifteenMinuteFetch = () => {
+  // Don't fetch immediately, wait for first scheduled time
+  console.log("🔄 Scheduling first fetch...");
 
   const now = new Date();
   const minutes = now.getMinutes();
-  const nextTenMinuteMark = Math.ceil(minutes / 10) * 10;
+  const nextFifteenMinuteMark = Math.ceil(minutes / 15) * 15;
   const delayToNextRun =
-    (nextTenMinuteMark - minutes) * 60 * 1000 -
+    (nextFifteenMinuteMark - minutes) * 60 * 1000 -
     now.getSeconds() * 1000 -
     now.getMilliseconds();
 
-  console.log(`⏰ Waiting ${Math.round(delayToNextRun / 1000)} seconds to start 10-minute interval job`);
+  console.log(`⏰ Waiting ${Math.round(delayToNextRun / 1000)} seconds to start 15-minute interval job`);
 
   setTimeout(() => {
-    fetchHourlyKline(); // Run at the next 10-minute mark
+    fetchHourlyKline(); // Run at the next 15-minute mark
 
-    // Then run every 10 minutes
-    setInterval(fetchHourlyKline, 10 * 60 * 1000);
+    // Then run every 15 minutes
+    setInterval(fetchHourlyKline, 15 * 60 * 1000);
   }, delayToNextRun);
 };
 
-scheduleTenMinuteFetch();
+scheduleFifteenMinuteFetch();
 
 // Health check
 app.get('/', (req, res) => {
@@ -97,7 +113,7 @@ app.get('/', (req, res) => {
 // Get latest hourly K-line data
 app.get('/kline/hourly', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM btc_kline ORDER BY timestamp DESC LIMIT 100');
+    const result = await db.query('SELECT * FROM btc_kline_hourly ORDER BY timestamp DESC LIMIT 100');
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -114,7 +130,7 @@ app.get('/kline', async (req, res) => {
 
     if (start && end) {
       result = await db.query(
-        `SELECT * FROM btc_kline
+        `SELECT * FROM btc_kline_hourly
          WHERE timestamp BETWEEN $1::timestamptz AND $2::timestamptz
          ORDER BY timestamp ASC`,
         [start, end]
@@ -123,7 +139,7 @@ app.get('/kline', async (req, res) => {
       // fallback: latest 200 entries, still ordered by ASC
       result = await db.query(
         `SELECT * FROM (
-           SELECT * FROM btc_kline
+           SELECT * FROM btc_kline_hourly
            ORDER BY timestamp DESC
            LIMIT 200
          ) AS sub
