@@ -1,7 +1,8 @@
-// File name: server.js
-// use terminal by psql "postgresql://crypto_data_db_user:Ab7BqcyTVswXoiAEERrGKKnUaB57LliQ@dpg-d1bo9e3e5dus73eq88pg-a.oregon-postgres.render.com:5432/crypto_data_db?sslmode=require"
-// Author: Sunny1
-// Enhanced version with BTC and ETH support
+// File: server.js
+// Author: Cheng
+// Description: 
+//    use terminal by psql "postgresql://crypto_data_db_user:Ab7BqcyTVswXoiAEERrGKKnUaB57LliQ@dpg-d1bo9e3e5dus73eq88pg-a.oregon-postgres.render.com:5432/crypto_data_db?sslmode=require"
+//    Enhanced version with BTC and ETH support
 
 require('dotenv').config();
 const express = require("express");

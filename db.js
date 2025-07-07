@@ -1,5 +1,5 @@
-// File name: db.js
-// Author: sunny
+// File: db.js
+// Author: Cheng
 
 const { Pool } = require('pg');
 // PostgreSQL connection
